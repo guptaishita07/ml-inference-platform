@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+
+.venv/
+venv/
+
+.env
+
+.vscode/settings.json
+
+.idea/
+
+.pytest_cache/
+
+.DS_Store
+
+*.log
