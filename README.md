@@ -51,3 +51,9 @@ curl -X POST http://127.0.0.1:8000/predict \
 
 # {"label":"POSITIVE","score":0.9998}
 \```
+
+## Run with Docker
+\```bash
+docker build -t ml-inference-platform .
+docker run -p 8000:8000 ml-inference-platform
+\```
