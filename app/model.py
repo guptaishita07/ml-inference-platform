@@ -10,3 +10,10 @@ class SentimentModel:
     def predict(self, text: str) -> dict:
         result = self.pipe(text)[0]
         return {"label": result["label"], "score": result["score"]}
+
+    def predict_batch(self, texts: list[str]) -> list[dict]:
+        results = self.pipe(texts)
+        return [
+                {"label": r["label"], "score": r["score"]}
+                for r in results
+            ]
