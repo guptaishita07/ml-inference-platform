@@ -45,7 +45,6 @@ class DynamicBatcher:
             texts = [t for t, _ in batch]
             futures = [f for _, f in batch]
 
-            print(f"Processing batch of {len(texts)} requests")
 
             try:
                 results = self.model.predict_batch(texts)

@@ -57,3 +57,16 @@ curl -X POST http://127.0.0.1:8000/predict \
 docker build -t ml-inference-platform .
 docker run -p 8000:8000 ml-inference-platform
 \```
+
+## Performance Benchmark
+
+ApacheBench configuration:
+
+```bash
+ab -n 100 -c 10 -p request.json -T application/json http://127.0.0.1:8000/predict
+```
+
+| Version | Requests/sec | Mean Latency |
+|---------|-------------:|-------------:|
+| Direct inference | 31.59 | 316 ms |
+| Dynamic batching | 54.04 | 148 ms |

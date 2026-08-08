@@ -28,7 +28,6 @@ def root():
 def health():
     return {"status": "ok", "model_loaded": True}
 
-
 @app.post("/predict")
 async def predict(request: PredictRequest):
     return await batcher.predict(request.text)
