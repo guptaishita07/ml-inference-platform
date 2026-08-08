@@ -3,11 +3,15 @@ from pydantic import BaseModel
 
 from app.model import SentimentModel
 from app.batcher import DynamicBatcher
+from app.cache import PredictionCache
 
+# Create FastAPI app
 app = FastAPI()
 
+# Initialize shared components
 model = SentimentModel()
 batcher = DynamicBatcher(model, batch_size=8, max_wait_ms=50)
+cache = PredictionCache()
 
 
 class PredictRequest(BaseModel):
@@ -26,8 +30,31 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": True}
+    return {
+        "status": "ok",
+        "model_loaded": True
+    }
+
 
 @app.post("/predict")
 async def predict(request: PredictRequest):
-    return await batcher.predict(request.text)
+
+    # Check Redis cache first
+    cached_result = cache.get(request.text)
+
+    if cached_result is not None:
+        return {
+            **cached_result,
+            "cached": True
+        }
+
+    # Cache miss -> use dynamic batcher
+    result = await batcher.predict(request.text)
+
+    # Store result in Redis
+    cache.set(request.text, result)
+
+    return {
+        **result,
+        "cached": False
+    }
