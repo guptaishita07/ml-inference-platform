@@ -1,11 +1,14 @@
 import redis
 import hashlib
 import json
+import os
 
 class PredictionCache:
-    def __init__(self, host="localhost", port=6379, ttl_seconds=3600):
+    def __init__(self, host=None, port=6379, ttl_seconds=3600):
+        host = host or os.environ.get("REDIS_HOST", "localhost")
         self.client = redis.Redis(host=host, port=port, decode_responses=True)
         self.ttl = ttl_seconds
+
 
     def _make_key(self, text: str) -> str:
         hashed = hashlib.sha256(text.encode()).hexdigest()
