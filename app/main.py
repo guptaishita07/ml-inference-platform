@@ -6,6 +6,7 @@ import time
 from app.model import SentimentModel
 from app.batcher import DynamicBatcher
 from app.cache import PredictionCache
+from app.model_registry import VersionedModel
 
 from app.metrics import (
     REQUEST_COUNT,
@@ -14,15 +15,28 @@ from app.metrics import (
     CACHE_MISSES,
 )
 
-# Create FastAPI app
+
+# --------------------------------------------------
+# FastAPI application
+# --------------------------------------------------
+
 app = FastAPI()
 
-# Mount Prometheus metrics endpoint
+
+# --------------------------------------------------
+# Prometheus metrics
+# --------------------------------------------------
+
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
-# Shared components
+
+# --------------------------------------------------
+# Existing inference components
+# --------------------------------------------------
+
 model = SentimentModel()
+
 batcher = DynamicBatcher(
     model=model,
     batch_size=8,
@@ -32,14 +46,33 @@ batcher = DynamicBatcher(
 cache = PredictionCache()
 
 
+# --------------------------------------------------
+# MLflow model registry
+# --------------------------------------------------
+
+versioned_model = VersionedModel()
+
+
+# --------------------------------------------------
+# Request schema
+# --------------------------------------------------
+
 class PredictRequest(BaseModel):
     text: str
 
+
+# --------------------------------------------------
+# Startup
+# --------------------------------------------------
 
 @app.on_event("startup")
 async def startup():
     batcher.start()
 
+
+# --------------------------------------------------
+# Health / root endpoints
+# --------------------------------------------------
 
 @app.get("/")
 def root():
@@ -56,16 +89,33 @@ def health():
     }
 
 
+# --------------------------------------------------
+# Prediction endpoint
+# --------------------------------------------------
+
 @app.post("/predict")
-async def predict(request: PredictRequest):
+async def predict(
+    request: PredictRequest,
+    version: str = "1",
+):
     start = time.perf_counter()
 
     REQUEST_COUNT.inc()
 
+    # --------------------------------------------------
+    # Version-aware cache key
+    # --------------------------------------------------
+
+    cache_key = f"{version}:{request.text}"
+
+    # --------------------------------------------------
     # Check Redis cache
-    cached_result = cache.get(request.text)
+    # --------------------------------------------------
+
+    cached_result = cache.get(cache_key)
 
     if cached_result is not None:
+
         CACHE_HITS.inc()
 
         REQUEST_LATENCY.observe(
@@ -74,16 +124,37 @@ async def predict(request: PredictRequest):
 
         return {
             **cached_result,
+            "version": version,
             "cached": True
         }
 
+    # --------------------------------------------------
     # Cache miss
+    # --------------------------------------------------
+
     CACHE_MISSES.inc()
 
-    result = await batcher.predict(request.text)
+    # --------------------------------------------------
+    # Run MLflow versioned model
+    # --------------------------------------------------
 
-    # Store prediction in Redis
-    cache.set(request.text, result)
+    result = versioned_model.predict(
+        version,
+        request.text
+    )
+
+    # --------------------------------------------------
+    # Store result in Redis
+    # --------------------------------------------------
+
+    cache.set(
+        cache_key,
+        result
+    )
+
+    # --------------------------------------------------
+    # Record latency
+    # --------------------------------------------------
 
     REQUEST_LATENCY.observe(
         time.perf_counter() - start
@@ -91,5 +162,6 @@ async def predict(request: PredictRequest):
 
     return {
         **result,
+        "version": version,
         "cached": False
     }
